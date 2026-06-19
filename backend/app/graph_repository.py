@@ -132,3 +132,90 @@ def save_chunks(chunks: list[TextChunk]) -> dict:
         }
     finally:
         driver.close()
+
+def list_chunks(limit: int = 100) -> list[TextChunk]:
+    driver = get_driver()
+
+    try:
+        with driver.session() as session:
+            result = session.run(
+                """
+                MATCH (ch:Chunk)
+                RETURN ch.id AS id,
+                       ch.source_type AS source_type,
+                       ch.source_id AS source_id,
+                       ch.text AS text,
+                       ch.domain AS domain,
+                       ch.chunk_index AS chunk_index,
+                       ch.metadata AS metadata
+                ORDER BY ch.id
+                LIMIT $limit
+                """,
+                limit=limit,
+            )
+
+            chunks: list[TextChunk] = []
+
+            for record in result:
+                metadata = json.loads(record["metadata"]) if record["metadata"] else {}
+
+                chunks.append(
+                    TextChunk(
+                        id=record["id"],
+                        source_type=record["source_type"],
+                        source_id=record["source_id"],
+                        text=record["text"],
+                        domain=record["domain"],
+                        chunk_index=record["chunk_index"],
+                        metadata=metadata,
+                    )
+                )
+
+            return chunks
+    finally:
+        driver.close()
+
+def get_article_context(article_id: str) -> dict | None:
+    driver = get_driver()
+
+    try:
+        with driver.session() as session:
+            record = session.run(
+                """
+                MATCH (l:Law)-[:HAS_ARTICLE]->(a:Article {id: $article_id})
+                RETURN
+                    l.id AS law_id,
+                    l.name AS law_name,
+                    l.domain AS law_domain,
+                    l.source AS law_source,
+                    a.id AS article_id,
+                    a.article_no AS article_no,
+                    a.title AS article_title,
+                    a.text AS article_text,
+                    a.domain AS article_domain,
+                    a.effective_date AS article_effective_date
+                """,
+                article_id=article_id,
+            ).single()
+
+            if record is None:
+                return None
+
+            return {
+                "law": {
+                    "id": record["law_id"],
+                    "name": record["law_name"],
+                    "domain": record["law_domain"],
+                    "source": record["law_source"],
+                },
+                "article": {
+                    "id": record["article_id"],
+                    "article_no": record["article_no"],
+                    "title": record["article_title"],
+                    "text": record["article_text"],
+                    "domain": record["article_domain"],
+                    "effective_date": record["article_effective_date"],
+                },
+            }
+    finally:
+        driver.close()

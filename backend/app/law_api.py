@@ -123,7 +123,7 @@ def normalize_law_detail_articles(
     for article_element in root.findall(".//조문단위"):
         article_no = build_article_no(article_element)
         title = get_text(article_element, "조문제목") or None
-        text = get_text(article_element, "조문내용")
+        text = build_article_text(article_element)
         effective_date = parse_yyyymmdd(get_text(article_element, "조문시행일자"))
 
         if not text:
@@ -144,3 +144,22 @@ def normalize_law_detail_articles(
         )
 
     return articles
+
+def build_article_text(article_element: ET.Element) -> str:
+    parts = []
+
+    article_text = get_text(article_element, "조문내용")
+    if article_text:
+        parts.append(article_text)
+
+    for paragraph in article_element.findall(".//항"):
+        paragraph_text = get_text(paragraph, "항내용")
+        if paragraph_text:
+            parts.append(paragraph_text)
+
+        for item in paragraph.findall(".//호"):
+            item_text = get_text(item, "호내용")
+            if item_text:
+                parts.append(item_text)
+
+    return "\n".join(parts).strip()
